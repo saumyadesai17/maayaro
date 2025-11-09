@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -53,13 +53,23 @@ export async function GET(request: NextRequest) {
       const primaryImage = item.product.images?.find((img: any) => img.is_primary)
       const sortedImages = item.product.images?.sort((a: any, b: any) => a.sort_order - b.sort_order)
       
+      // Calculate prices like products API does
+      const activeVariants = item.product.variants?.filter((v: any) => v.is_active && v.stock_quantity > 0) || []
+      const variantPrices = activeVariants
+        .map((v: any) => v.price)
+        .filter((price: any) => price !== null)
+      
+      const currentPrice = variantPrices.length > 0 ? Math.min(...variantPrices) : item.product.base_price
+      const originalPrice = variantPrices.length > 1 ? Math.max(...variantPrices) : null
+      
       return {
         id: item.id,
         product_id: item.product_id,
         name: item.product.name,
         slug: item.product.slug,
         description: item.product.description,
-        price: item.product.base_price,
+        price: currentPrice,
+        original_price: originalPrice,
         sku: item.product.variants?.[0]?.sku || `MAAY-${item.product_id.substring(0, 8)}`,
         image: primaryImage?.image_url || sortedImages?.[0]?.image_url || '',
         hoverImage: sortedImages?.[1]?.image_url || sortedImages?.[0]?.image_url,
@@ -95,11 +105,18 @@ export async function POST(request: NextRequest) {
 
     const { product_id } = await request.json()
 
+    console.log('Adding to wishlist - product_id:', product_id, 'type:', typeof product_id)
+
+    // Ensure product_id is treated as string (UUID format)
+    const productIdString = String(product_id)
+    
+    console.log('Processed productIdString:', productIdString)
+
     const { data, error } = await supabase
       .from('wishlists')
       .insert({
         user_id: user.id,
-        product_id,
+        product_id: productIdString,
       })
       .select()
       .single()

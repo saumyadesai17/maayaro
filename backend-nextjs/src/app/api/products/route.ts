@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const maxPrice = searchParams.get('maxPrice')
     const colors = searchParams.get('colors')?.split(',').filter(Boolean) || []
     const sizes = searchParams.get('sizes')?.split(',').filter(Boolean) || []
-    const sortBy = searchParams.get('sortBy') || 'newest' // newest, price-low, price-high, popular
+    const sortBy = searchParams.get('sortBy') || 'featured' // newest, price-low, price-high, popular
 
     // Base query - join with variants to enable color/size/price filtering
     let query = supabase

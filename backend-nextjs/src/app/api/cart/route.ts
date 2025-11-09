@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       .from('carts')
       .select(`
         *,
-        cart_items(
+        cart_items!inner(
           *,
           product_variant:product_variants(
             *,
@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('user_id', user.id)
+      .order('created_at', { foreignTable: 'cart_items', ascending: true })
       .single()
 
     if (!cart) {
