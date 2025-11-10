@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Apply coupon if provided
-    let discount = 0
+    const discount = 0
     if (coupon_code) {
       // Validate and apply coupon logic here
       // ...discount calculation

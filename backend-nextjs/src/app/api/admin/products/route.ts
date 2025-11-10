@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   const auth = await requireAdmin()
   if (auth.error) return auth.error
 
-  const { supabase, user } = auth
+  const { supabase } = auth
   const productData = await request.json()
 
   const { data: product, error } = await supabase

@@ -3,12 +3,13 @@ import { requireAdmin } from '@/lib/admin-auth'
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { key: string } }
+  { params }: { params: Promise<{ key: string }> }
 ) {
   const auth = await requireAdmin()
   if (auth.error) return auth.error
 
   const { supabase, user } = auth
+  const { key } = await params
   const { value } = await request.json()
 
   const { data: setting, error } = await supabase
@@ -17,7 +18,7 @@ export async function PUT(
       value,
       updated_by: user.id,
     })
-    .eq('key', params.key)
+    .eq('key', key)
     .select()
     .single()
 

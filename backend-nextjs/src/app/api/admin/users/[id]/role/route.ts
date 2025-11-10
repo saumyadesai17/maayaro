@@ -3,12 +3,13 @@ import { requireAdmin } from '@/lib/admin-auth'
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAdmin()
   if (auth.error) return auth.error
 
   const { supabase, profile } = auth
+  const { id } = await params
 
   // Only super_admin can change roles
   if (profile.role !== 'super_admin') {
@@ -23,7 +24,7 @@ export async function PUT(
   const { data: user, error } = await supabase
     .from('profiles')
     .update({ role })
-    .eq('id', params.id)
+    .eq('id', id)
     .select()
     .single()
 

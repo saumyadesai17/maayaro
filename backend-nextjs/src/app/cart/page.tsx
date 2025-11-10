@@ -8,9 +8,9 @@ import { CartPage } from '@/components/CartPage';
 export default function Cart() {
   const router = useRouter();
 
-  const handleNavigate = (page: string, productId?: number) => {
-    if (productId) {
-      router.push(`/product/${productId}`);
+  const handleNavigate = (page: string, productSlug?: string) => {
+    if (productSlug) {
+      router.push(`/product/${productSlug}`);
     } else {
       router.push(`/${page}`);
     }

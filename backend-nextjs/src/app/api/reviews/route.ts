@@ -18,11 +18,11 @@ export async function POST(request: NextRequest) {
     // Verify user purchased the product
     const { data: orderItem } = await supabase
       .from('order_items')
-      .select('order:orders(user_id)')
+      .select('order:orders!inner(user_id)')
       .eq('id', order_item_id)
       .single()
 
-    if (!orderItem || orderItem.order.user_id !== user.id) {
+    if (!orderItem || (orderItem.order as any)?.user_id !== user.id) {
       return NextResponse.json(
         { error: 'You can only review products you have purchased' },
         { status: 403 }

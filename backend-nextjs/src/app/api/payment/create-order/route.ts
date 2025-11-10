@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { razorpay } from '@/lib/razorpay'
 import { createClient } from '@/lib/supabase/server'
-import { v4 as uuid } from 'uuid'
 
 export async function POST(request: NextRequest) {
   try {

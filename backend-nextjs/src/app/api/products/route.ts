@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Execute query
-    const { data: rawProducts, error, count } = await query
+    const { data: rawProducts, error } = await query
       .range(offset, offset + limit - 1)
 
     if (error) {

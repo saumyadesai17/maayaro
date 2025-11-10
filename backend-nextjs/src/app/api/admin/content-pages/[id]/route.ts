@@ -3,12 +3,13 @@ import { requireAdmin } from '@/lib/admin-auth'
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAdmin()
   if (auth.error) return auth.error
 
   const { supabase } = auth
+  const { id } = await params
   const updates = await request.json()
 
   // If publishing, set published_at
@@ -19,7 +20,7 @@ export async function PUT(
   const { data: page, error } = await supabase
     .from('content_pages')
     .update(updates)
-    .eq('id', params.id)
+    .eq('id', id)
     .select()
     .single()
 
@@ -32,17 +33,18 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAdmin()
   if (auth.error) return auth.error
 
   const { supabase } = auth
+  const { id } = await params
 
   const { error } = await supabase
     .from('content_pages')
     .delete()
-    .eq('id', params.id)
+    .eq('id', id)
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
