@@ -1,7 +1,7 @@
 'use client';
 
 import { Search, Heart, ShoppingBag, User, Menu, X } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCounts } from '@/contexts/CountsContext';
 
@@ -12,7 +12,31 @@ interface HeaderProps {
 export function Header({ onNavigate }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const { cartCount, wishlistCount } = useCounts();
+
+  useEffect(() => {
+    // Check if user is logged in
+    const checkAuthStatus = async () => {
+      try {
+        const response = await fetch('/api/auth/user');
+        const data = await response.json();
+        setIsLoggedIn(!!data.user);
+      } catch (error) {
+        setIsLoggedIn(false);
+      }
+    };
+    
+    checkAuthStatus();
+  }, []);
+
+  const handleAccountClick = () => {
+    if (isLoggedIn) {
+      onNavigate('account');
+    } else {
+      onNavigate('login');
+    }
+  };
 
   const navigation = [
     { name: 'Women', page: 'women' },
@@ -65,7 +89,7 @@ export function Header({ onNavigate }: HeaderProps) {
               <Search className="w-5 h-5" />
             </button>
             <button
-              onClick={() => onNavigate('account')}
+              onClick={handleAccountClick}
               className="hover:opacity-60 transition-opacity hidden sm:block"
               aria-label="Account"
             >
@@ -148,13 +172,13 @@ export function Header({ onNavigate }: HeaderProps) {
               <div className="pt-4 border-t border-border space-y-4">
                 <button
                   onClick={() => {
-                    onNavigate('account');
+                    handleAccountClick();
                     setIsMenuOpen(false);
                   }}
                   className="flex items-center gap-3 w-full py-2 hover:text-muted-foreground transition-colors"
                 >
                   <User className="w-5 h-5" />
-                  <span>Account</span>
+                  <span>{isLoggedIn ? 'Account' : 'Login'}</span>
                 </button>
                 <button
                   onClick={() => {
