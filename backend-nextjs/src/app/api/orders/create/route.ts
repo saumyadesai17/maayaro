@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
       shipping_address_id,
       billing_address_id,
       payment_method,
+      shipping_method,
       coupon_code,
       notes,
     } = await request.json()
@@ -82,8 +83,41 @@ export async function POST(request: NextRequest) {
       // ...discount calculation
     }
 
-    const tax = subtotal * 0.18 // 18% GST
-    const shipping_fee = subtotal > 500 ? 0 : 50
+    // Fetch site settings for tax and shipping calculations
+    const { data: settings } = await supabase
+      .from('site_settings')
+      .select('key, value, type')
+      .in('key', ['tax_rate', 'free_shipping_threshold', 'standard_shipping_fee'])
+
+    // Convert settings to object
+    const settingsMap: Record<string, number> = {}
+    settings?.forEach((setting) => {
+      settingsMap[setting.key] = parseFloat(setting.value)
+    })
+
+    // Get tax rate from settings (default to 0.18 if not found)
+    const taxRate = settingsMap['tax_rate'] || 0.18
+    
+    // Calculate shipping fee based on shipping method and database settings
+    let shipping_fee = 0
+    const freeShippingThreshold = settingsMap['free_shipping_threshold'] || 500
+    const standardShippingFee = settingsMap['standard_shipping_fee'] || 50
+
+    if (shipping_method === 'standard') {
+      // Free shipping if order meets threshold
+      shipping_fee = subtotal >= freeShippingThreshold ? 0 : standardShippingFee
+    } else if (shipping_method === 'express') {
+      shipping_fee = 200
+    } else if (shipping_method === 'same-day') {
+      shipping_fee = 300
+    } else {
+      // Default to standard shipping rules if method not specified
+      shipping_fee = subtotal >= freeShippingThreshold ? 0 : standardShippingFee
+    }
+    
+    // Calculate tax on (subtotal - discount + shipping_fee) to match frontend
+    const tax = Math.round((subtotal - discount + shipping_fee) * taxRate)
+    
     const total = subtotal - discount + tax + shipping_fee
 
     // Generate unique order number
@@ -169,8 +203,9 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Clear cart
-    await supabase.from('cart_items').delete().eq('cart_id', cart.id)
+    // Note: Cart will be cleared after successful payment verification
+    // For COD orders, cart is cleared immediately in the frontend
+    // For online payments, cart is cleared after payment success verification
 
     return NextResponse.json({ success: true, order })
   } catch (error) {

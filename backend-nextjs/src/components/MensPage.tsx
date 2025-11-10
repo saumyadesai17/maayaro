@@ -3,7 +3,7 @@
 import { CollectionPage } from './CollectionPage';
 
 interface MensPageProps {
-  onNavigate: (page: string, productId?: number) => void;
+  onNavigate: (page: string, productSlug?: string) => void;
 }
 
 export function MensPage({ onNavigate }: MensPageProps) {

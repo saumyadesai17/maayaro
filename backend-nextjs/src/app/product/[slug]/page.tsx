@@ -8,11 +8,11 @@ import { ProductDetailPage } from '@/components/ProductDetailPage';
 export default function Product() {
   const router = useRouter();
   const params = useParams();
-  const productId = Number(params.id);
+  const slug = params.slug as string;
 
-  const handleNavigate = (page: string, productId?: number) => {
-    if (productId) {
-      router.push(`/product/${productId}`);
+  const handleNavigate = (page: string, productSlug?: string) => {
+    if (page === 'product' && productSlug) {
+      router.push(`/product/${productSlug}`);
     } else {
       router.push(`/${page}`);
     }
@@ -21,7 +21,7 @@ export default function Product() {
   return (
     <div className="min-h-screen">
       <Header onNavigate={handleNavigate} />
-      <ProductDetailPage productId={productId} onNavigate={handleNavigate} />
+      <ProductDetailPage productSlug={slug} onNavigate={handleNavigate} />
       <Footer onNavigate={handleNavigate} />
     </div>
   );

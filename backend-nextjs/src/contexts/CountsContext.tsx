@@ -5,9 +5,12 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 interface CountsContextType {
   cartCount: number;
   wishlistCount: number;
+  wishlistItems: string[];
+  isInWishlist: (productId: string | number) => boolean;
   refreshCounts: () => void;
   updateCartCount: (count: number) => void;
   updateWishlistCount: (count: number) => void;
+  refreshWishlist: () => Promise<void>;
 }
 
 const CountsContext = createContext<CountsContextType | undefined>(undefined);
@@ -15,6 +18,8 @@ const CountsContext = createContext<CountsContextType | undefined>(undefined);
 export function CountsProvider({ children }: { children: ReactNode }) {
   const [cartCount, setCartCount] = useState(0);
   const [wishlistCount, setWishlistCount] = useState(0);
+  const [wishlistItems, setWishlistItems] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Fetch cart count
   const fetchCartCount = async () => {
@@ -33,18 +38,25 @@ export function CountsProvider({ children }: { children: ReactNode }) {
     return 0;
   };
 
-  // Fetch wishlist count
+  // Fetch wishlist count and items
   const fetchWishlistCount = async () => {
+    if (isLoading) return wishlistCount; // Prevent multiple concurrent calls
+    
     try {
+      setIsLoading(true);
       const response = await fetch('/api/wishlist');
       if (response.ok) {
         const data = await response.json();
-        const count = data.wishlist?.length || 0;
-        setWishlistCount(count);
-        return count;
+        const items = data.wishlist || [];
+        const itemIds = items.map((item: any) => item.product_id);
+        setWishlistItems(itemIds);
+        setWishlistCount(items.length);
+        return items.length;
       }
     } catch (error) {
       console.error('Error fetching wishlist count:', error);
+    } finally {
+      setIsLoading(false);
     }
     return 0;
   };
@@ -61,6 +73,15 @@ export function CountsProvider({ children }: { children: ReactNode }) {
     setWishlistCount(count);
   };
 
+  const refreshWishlist = async () => {
+    await fetchWishlistCount();
+  };
+
+  const isInWishlist = (productId: string | number) => {
+    const productIdString = typeof productId === 'string' ? productId : productId.toString();
+    return wishlistItems.includes(productIdString);
+  };
+
   useEffect(() => {
     refreshCounts();
   }, []);
@@ -70,9 +91,12 @@ export function CountsProvider({ children }: { children: ReactNode }) {
       value={{
         cartCount,
         wishlistCount,
+        wishlistItems,
+        isInWishlist,
         refreshCounts,
         updateCartCount,
         updateWishlistCount,
+        refreshWishlist,
       }}
     >
       {children}

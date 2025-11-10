@@ -40,10 +40,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
 
-    // Check order status
-    if (order.status !== 'confirmed' && order.status !== 'processing') {
+    // Check order status - allow pending status if called immediately after payment
+    console.log('Checking order status:', order.status)
+    if (!['confirmed', 'processing', 'pending'].includes(order.status)) {
+      console.error('Order status not valid for shipping:', order.status)
       return NextResponse.json(
-        { error: 'Order must be confirmed before shipping' },
+        { error: `Order cannot be shipped with status: ${order.status}` },
         { status: 400 }
       )
     }
@@ -60,15 +62,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Map order items for Shiprocket
+    // IMPORTANT: Shiprocket's tax calculation is complex and depends on state codes
+    // For inter-state (different state codes), they automatically apply IGST
+    // We send the tax-INCLUSIVE selling price and let them calculate tax breakdown
     const shiprocketItems = order.order_items.map((item: any) => {
       console.log('Mapping item:', item)
+      
+      // Calculate proportional tax for this item
+      const itemTaxAmount = order.tax ? (item.total_price / order.subtotal) * order.tax : 0;
+      
+      // Send tax-inclusive price as selling_price
+      const taxInclusivePrice = (parseFloat(item.unit_price) || 0) + itemTaxAmount;
+      
       return {
         name: item.product_name || 'Product',
         sku: item.variant_details?.sku || item.sku || 'GENERIC-SKU',
         units: parseInt(item.quantity) || 1,
-        selling_price: parseFloat(item.unit_price) || parseFloat(item.total_price) || 100,
+        selling_price: Math.round(taxInclusivePrice), // Tax-inclusive price
         discount: 0,
-        tax: 0,
+        tax: 0, // Let Shiprocket calculate tax from the inclusive price
       }
     })
 
@@ -104,6 +116,11 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('Shiprocket order payload:', JSON.stringify(shiprocketOrder, null, 2))
+    
+    // Calculate expected Shiprocket total for validation
+    const expectedShiprocketTotal = order.subtotal + (order.shipping_fee || 0) + order.tax - (order.discount || 0);
+    console.log('Expected Shiprocket Total:', expectedShiprocketTotal, '(should match order.total:', order.total, ')');
+    console.log('Breakdown: subtotal', order.subtotal, '+ shipping', order.shipping_fee, '+ tax', order.tax, '- discount', order.discount);
 
     const data = await shiprocketRequest('/orders/create/adhoc', {
       method: 'POST',

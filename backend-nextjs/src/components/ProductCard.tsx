@@ -19,7 +19,7 @@ interface ProductCardProps {
   colors?: number;
   brand?: string;
   sku?: string;
-  onProductClick?: (id: number) => void;
+  onProductClick?: (slug: string) => void;
 }
 
 export function ProductCard({
@@ -37,30 +37,17 @@ export function ProductCard({
 }: ProductCardProps) {
   const [currentImage, setCurrentImage] = useState(image);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [isWishlisted, setIsWishlisted] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [wishlistSuccess, setWishlistSuccess] = useState(false);
-  const { refreshCounts } = useCounts();
+  const { refreshCounts, isInWishlist, refreshWishlist } = useCounts();
+  const isWishlisted = isInWishlist(id);
 
   const numericPrice = typeof price === 'number' ? price : parseFloat(price.replace(/[^\d.]/g, ''));
   const displayPrice = typeof price === 'string' ? price : `₹${price.toLocaleString('en-IN')}`;
   const hasDiscount = original_price && original_price > 0;
   const discount = hasDiscount ? Math.round(((original_price - numericPrice) / original_price) * 100) : 0;
 
-  // Check if product is in wishlist
-  const checkWishlistStatus = async () => {
-    try {
-      const response = await fetch('/api/wishlist');
-      if (response.ok) {
-        const data = await response.json();
-        const productIdString = typeof id === 'string' ? id : id.toString();
-        const isInWishlist = data.wishlist?.some((item: any) => item.product_id === productIdString);
-        setIsWishlisted(isInWishlist);
-      }
-    } catch (error) {
-      console.error('Error checking wishlist status:', error);
-    }
-  };
+
 
   // Add to wishlist
   const addToWishlist = async () => {
@@ -78,9 +65,8 @@ export function ProductCard({
       });
 
       if (response.ok) {
-        setIsWishlisted(true);
         setWishlistSuccess(true);
-        refreshCounts(); // Update header counts
+        refreshWishlist(); // Refresh wishlist data in context
         
         // Reset success state after animation
         setTimeout(() => {
@@ -107,8 +93,7 @@ export function ProductCard({
       });
 
       if (response.ok) {
-        setIsWishlisted(false);
-        refreshCounts(); // Update header counts
+        refreshWishlist(); // Refresh wishlist data in context
       } else {
         const errorData = await response.json();
         console.error('Error removing from wishlist:', errorData.error);
@@ -131,9 +116,7 @@ export function ProductCard({
     }
   };
 
-  useEffect(() => {
-    checkWishlistStatus();
-  }, [id]);
+
 
   return (
     <motion.div
@@ -147,7 +130,7 @@ export function ProductCard({
       {/* Image Container */}
       <div 
         className="relative aspect-3/4 overflow-hidden bg-muted cursor-pointer mb-4"
-        onClick={() => onProductClick?.(typeof id === 'string' ? parseInt(id.split('-').pop() || '0') : id)}
+        onClick={() => slug && onProductClick?.(slug)}
       >
         <motion.div
           className="w-full h-full"
@@ -254,7 +237,7 @@ export function ProductCard({
       <div className="space-y-2">
         <motion.h3 
           className="text-sm leading-tight line-clamp-2 cursor-pointer min-h-10"
-          onClick={() => onProductClick?.(typeof id === 'string' ? parseInt(id.split('-').pop() || '0') : id)}
+          onClick={() => slug && onProductClick?.(slug)}
           whileHover={{ color: 'rgb(115, 115, 115)' }}
           transition={{ duration: 0.2 }}
         >

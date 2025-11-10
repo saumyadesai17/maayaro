@@ -8,9 +8,9 @@ import { CollectionPage } from '@/components/CollectionPage';
 export default function Collection() {
   const router = useRouter();
 
-  const handleNavigate = (page: string, productId?: number) => {
-    if (productId) {
-      router.push(`/product/${productId}`);
+  const handleNavigate = (page: string, productSlug?: string) => {
+    if (page === 'product' && productSlug) {
+      router.push(`/product/${productSlug}`);
     } else {
       router.push(`/${page}`);
     }

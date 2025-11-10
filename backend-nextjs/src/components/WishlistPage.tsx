@@ -37,7 +37,7 @@ interface WishlistItem {
 }
 
 interface WishlistPageProps {
-  onNavigate: (page: string, productId?: number) => void;
+  onNavigate: (page: string, productSlug?: string) => void;
 }
 
 export function WishlistPage({ onNavigate }: WishlistPageProps) {
@@ -49,7 +49,7 @@ export function WishlistPage({ onNavigate }: WishlistPageProps) {
   const [selectedItem, setSelectedItem] = useState<WishlistItem | null>(null);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [itemToRemove, setItemToRemove] = useState<{ productId: string; productName: string } | null>(null);
-  const { refreshCounts } = useCounts();
+  const { refreshCounts, refreshWishlist } = useCounts();
 
   // Fetch wishlist data
   const fetchWishlist = async () => {
@@ -107,8 +107,8 @@ export function WishlistPage({ onNavigate }: WishlistPageProps) {
         throw new Error(errorData.error || 'Failed to remove from wishlist');
       }
       
-      // Update header counts
-      refreshCounts();
+      // Update header counts and refresh wishlist cache
+      refreshWishlist();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove from wishlist');
       // Revert optimistic update on error
@@ -233,7 +233,7 @@ export function WishlistPage({ onNavigate }: WishlistPageProps) {
                   src={item.image}
                   alt={item.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  onClick={() => onNavigate('product', parseInt(item.product_id))}
+                  onClick={() => onNavigate('product', item.slug)}
                 />
 
                 {/* Remove Button */}
@@ -268,7 +268,7 @@ export function WishlistPage({ onNavigate }: WishlistPageProps) {
               <div className="space-y-2">
                 <h3
                   className="text-sm leading-tight line-clamp-2 cursor-pointer hover:text-muted-foreground transition-colors min-h-10"
-                  onClick={() => onNavigate('product', parseInt(item.product_id))}
+                  onClick={() => onNavigate('product', item.slug)}
                 >
                   {item.name}
                 </h3>

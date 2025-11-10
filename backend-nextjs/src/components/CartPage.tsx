@@ -17,7 +17,7 @@ import {
 import { useCounts } from '@/contexts/CountsContext';
 
 interface CartPageProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, productSlug?: string) => void;
 }
 
 interface CartItemVariant {
@@ -76,6 +76,38 @@ export function CartPage({ onNavigate }: CartPageProps) {
 
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<{code: string, discount: number} | null>(null);
+  
+  // Site settings state
+  const [siteSettings, setSiteSettings] = useState<{
+    tax_rate: number;
+    free_shipping_threshold: number;
+    standard_shipping_fee: number;
+  }>({
+    tax_rate: 0.18,
+    free_shipping_threshold: 500,
+    standard_shipping_fee: 50,
+  });
+
+  // Fetch site settings
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch('/api/settings');
+        if (response.ok) {
+          const settings = await response.json();
+          setSiteSettings({
+            tax_rate: settings.tax_rate || 0.18,
+            free_shipping_threshold: settings.free_shipping_threshold || 500,
+            standard_shipping_fee: settings.standard_shipping_fee || 50,
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching settings:', error);
+        // Keep default values on error
+      }
+    };
+    fetchSettings();
+  }, []);
 
   // Fetch cart data
   useEffect(() => {
@@ -380,8 +412,8 @@ export function CartPage({ onNavigate }: CartPageProps) {
   }, 0) || 0;
 
   const discount = appliedPromo?.discount || 0;
-  const shipping = subtotal > 5000 ? 0 : 150;
-  const tax = Math.round((subtotal - discount) * 0.18);
+  const shipping = subtotal >= siteSettings.free_shipping_threshold ? 0 : siteSettings.standard_shipping_fee;
+  const tax = Math.round((subtotal - discount + shipping) * siteSettings.tax_rate);
   const total = subtotal - discount + shipping + tax;
 
   // Transform cart items to match the UI expectations
@@ -530,7 +562,7 @@ export function CartPage({ onNavigate }: CartPageProps) {
                     src={item.image}
                     alt={item.name}
                     className="w-full h-full object-cover hover:scale-105 transition-transform duration-500 cursor-pointer"
-                    onClick={() => onNavigate('product')}
+                    onClick={() => onNavigate('product', item.product_slug)}
                   />
                 </div>
 
@@ -540,7 +572,7 @@ export function CartPage({ onNavigate }: CartPageProps) {
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <h3
                       className="text-sm sm:text-base font-medium cursor-pointer hover:text-muted-foreground transition-colors line-clamp-2 leading-snug"
-                      onClick={() => onNavigate('product')}
+                      onClick={() => onNavigate('product', item.product_slug)}
                     >
                       {item.name}
                     </h3>
@@ -786,13 +818,13 @@ export function CartPage({ onNavigate }: CartPageProps) {
                   </div>
 
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tax (GST 18%)</span>
+                    <span className="text-muted-foreground">Tax (GST {Math.round(siteSettings.tax_rate * 100)}%)</span>
                     <span>₹{tax.toLocaleString('en-IN')}</span>
                   </div>
 
-                  {subtotal < 5000 && (
+                  {subtotal < siteSettings.free_shipping_threshold && (
                     <p className="text-xs text-muted-foreground pt-2">
-                      Add ₹{(5000 - subtotal).toLocaleString('en-IN')} more for free shipping
+                      Add ₹{(siteSettings.free_shipping_threshold - subtotal).toLocaleString('en-IN')} more for free shipping
                     </p>
                   )}
                 </div>

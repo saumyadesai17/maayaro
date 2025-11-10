@@ -51,3 +51,36 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Delete all cart items first
+    await supabase
+      .from('cart_items')
+      .delete()
+      .eq('cart_id', (
+        await supabase
+          .from('carts')
+          .select('id')
+          .eq('user_id', user.id)
+          .single()
+      ).data?.id)
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error clearing cart:', error)
+    return NextResponse.json(
+      { error: 'Failed to clear cart' },
+      { status: 500 }
+    )
+  }
+}

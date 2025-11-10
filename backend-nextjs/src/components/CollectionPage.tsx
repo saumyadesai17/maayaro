@@ -14,7 +14,7 @@ interface CollectionPageProps {
   description?: string;
   heroImage?: string;
   categoryType: 'women' | 'men' | 'traditional' | 'collection';
-  onNavigate: (page: string, productId?: number) => void;
+  onNavigate: (page: string, productSlug?: string) => void;
 }
 
 type SortOption = 'featured' | 'price-low' | 'price-high' | 'newest' | 'popular';
@@ -888,7 +888,7 @@ export function CollectionPage({
                   >
                     <ProductCard
                       {...product}
-                      onProductClick={(id) => onNavigate('product', id)}
+                      onProductClick={(slug) => onNavigate('product', slug)}
                     />
                   </motion.div>
                 ))}

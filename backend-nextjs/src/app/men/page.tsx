@@ -8,9 +8,9 @@ import { MensPage } from '@/components/MensPage';
 export default function Men() {
   const router = useRouter();
 
-  const handleNavigate = (page: string, productId?: number) => {
-    if (productId) {
-      router.push(`/product/${productId}`);
+  const handleNavigate = (page: string, productSlug?: string) => {
+    if (page === 'product' && productSlug) {
+      router.push(`/product/${productSlug}`);
     } else {
       router.push(`/${page}`);
     }
