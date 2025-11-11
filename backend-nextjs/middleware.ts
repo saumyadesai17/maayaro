@@ -34,10 +34,17 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Protected routes
-  if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
+  // Protected routes - redirect to login if not authenticated
+  const protectedPaths = ['/dashboard', '/account'];
+  const isProtectedPath = protectedPaths.some(path => 
+    request.nextUrl.pathname.startsWith(path)
+  );
+
+  if (!user && isProtectedPath) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    // Add redirect parameter to return to original page after login
+    url.searchParams.set('redirect', request.nextUrl.pathname)
     return NextResponse.redirect(url)
   }
 

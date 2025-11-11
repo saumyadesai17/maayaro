@@ -19,25 +19,40 @@ export default function AccountLayout({
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchProfile = async () => {
       try {
-        const response = await fetch('/api/user/profile');
+        const response = await fetch('/api/user/profile', {
+          credentials: 'include',
+          cache: 'no-store',
+        });
         const data = await response.json();
+        
+        if (!isMounted) return;
         
         if (response.ok && data.success) {
           setUserProfile(data.profile);
-        } else if (response.status === 401) {
-          router.push('/login');
+        } else {
+          // Middleware should have already redirected if not authenticated
+          // This is just for updating profile data
+          console.error('Profile fetch failed:', data.error);
         }
       } catch (error) {
         console.error('Error fetching profile:', error);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchProfile();
-  }, [router]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleNavigate = (page: string, productSlug?: string) => {
     if (productSlug) {
