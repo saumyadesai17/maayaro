@@ -126,7 +126,7 @@ export function OrderConfirmationPage({ onNavigate, orderData }: OrderConfirmati
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4">
               <button
-                onClick={() => onNavigate('account')}
+                onClick={() => onNavigate('account/orders')}
                 className="flex-1 py-4 bg-primary text-primary-foreground hover:bg-foreground transition-colors font-medium flex items-center justify-center gap-2"
               >
                 <Package className="w-5 h-5" />

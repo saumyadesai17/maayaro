@@ -7,7 +7,7 @@ import { ArrowRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 interface HomePageProps {
-  onNavigate: (page: string, productId?: number) => void;
+  onNavigate: (page: string, productSlug?: string) => void;
 }
 
 interface Product {
@@ -268,7 +268,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
                     hoverImage={product.images?.[1]?.image_url || product.image}
                     category={product.original_price && product.original_price > product.price ? 'Sale' : undefined}
                     colors={product.available_colors?.length || 0}
-                    onProductClick={() => onNavigate('product', product.id)}
+                    onProductClick={(slug) => onNavigate('product', slug)}
                   />
                 </motion.div>
               ))}

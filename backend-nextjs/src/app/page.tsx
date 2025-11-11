@@ -8,9 +8,9 @@ import { HomePage } from '@/components/HomePage';
 export default function Home() {
   const router = useRouter();
 
-  const handleNavigate = (page: string, productId?: number) => {
-    if (productId) {
-      router.push(`/product/${productId}`);
+  const handleNavigate = (page: string, productSlug?: string) => {
+    if (productSlug) {
+      router.push(`/product/${productSlug}`);
     } else {
       router.push(`/${page}`);
     }

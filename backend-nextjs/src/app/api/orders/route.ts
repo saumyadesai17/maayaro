@@ -20,7 +20,16 @@ export async function GET(request: NextRequest) {
           *,
           product_variant:product_variants(
             *,
-            product:products(*)
+            product:products(
+              *,
+              images:product_images(
+                id,
+                image_url,
+                alt_text,
+                is_primary,
+                sort_order
+              )
+            )
           )
         ),
         payment:payments(*),

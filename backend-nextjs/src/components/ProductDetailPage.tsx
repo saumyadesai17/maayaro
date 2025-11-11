@@ -375,7 +375,7 @@ export function ProductDetailPage({ productSlug, onNavigate }: ProductDetailPage
       <div className="border-b border-border">
         <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-4">
           <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground overflow-x-auto scrollbar-hide">
-            <button onClick={() => onNavigate('home')} className="hover:text-foreground transition-colors whitespace-nowrap shrink-0 font-normal">
+            <button onClick={() => onNavigate('/')} className="hover:text-foreground transition-colors whitespace-nowrap shrink-0 font-normal">
               Home
             </button>
             <span className="shrink-0">/</span>
