@@ -225,13 +225,26 @@ export function CheckoutPage({ onNavigate }: CheckoutPageProps) {
     },
   ];
 
-  const subtotal = cartTotal;
+  // Financial calculations matching backend logic
+  const subtotal = cartTotal; // This is the base price (tax-exclusive)
   const discount = 0; // TODO: Apply promo codes when implemented
   const shippingCost = selectedShipping === 'standard' && subtotal >= siteSettings.free_shipping_threshold 
     ? 0 
     : shippingMethods.find(m => m.id === selectedShipping)?.cost || 0;
-  const tax = Math.round((subtotal - discount + shippingCost) * siteSettings.tax_rate);
-  const total = subtotal - discount + shippingCost + tax;
+  
+  // Calculate item tax (tax-exclusive subtotal × tax rate)
+  const itemTax = Math.round((subtotal - discount) * siteSettings.tax_rate * 100) / 100;
+  
+  // Calculate shipping tax (shipping is tax-inclusive, extract tax portion)
+  // Formula: (fee / (1 + rate)) * rate
+  const shippingTax = shippingCost > 0 
+    ? Math.round(((shippingCost / (1 + siteSettings.tax_rate)) * siteSettings.tax_rate) * 100) / 100
+    : 0;
+  
+  const tax = itemTax + shippingTax;
+  
+  // Total = base subtotal + item tax + shipping (tax-inclusive)
+  const total = Math.round((subtotal - discount + itemTax + shippingCost) * 100) / 100;
 
   const steps = [
     { id: 'shipping', label: 'Shipping', icon: MapPin },

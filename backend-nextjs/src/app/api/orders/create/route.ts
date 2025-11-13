@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import computeOrderFinancials from '@/lib/finance/computeOrderFinancials'
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,6 +20,7 @@ export async function POST(request: NextRequest) {
       shipping_method,
       coupon_code,
       notes,
+      package_dimensions,
     } = await request.json()
 
     // Get cart with items
@@ -44,100 +46,110 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 })
     }
 
-    // Calculate totals
-    let subtotal = 0
-    const orderItems = []
+    // Fetch addresses
+    const { data: shippingAddress, error: shippingError } = await supabase
+      .from('addresses')
+      .select('*')
+      .eq('id', shipping_address_id)
+      .eq('user_id', user.id)
+      .single()
 
-    for (const item of cart.cart_items) {
-      const variant = item.product_variant
-      
-      if (variant.stock_quantity < item.quantity) {
-        return NextResponse.json(
-          { error: `Insufficient stock for ${variant.product.name}` },
-          { status: 400 }
-        )
-      }
-
-      const price = variant.price || variant.product.base_price
-      const itemTotal = price * item.quantity
-      subtotal += itemTotal
-
-      orderItems.push({
-        product_variant_id: variant.id,
-        product_name: variant.product.name,
-        variant_details: {
-          size: variant.size,
-          color: variant.color,
-          sku: variant.sku,
-        },
-        quantity: item.quantity,
-        unit_price: price,
-        total_price: itemTotal,
-      })
+    if (shippingError || !shippingAddress) {
+      return NextResponse.json({ error: 'Invalid shipping address' }, { status: 400 })
     }
 
-    // Apply coupon if provided
-    const discount = 0
-    if (coupon_code) {
-      // Validate and apply coupon logic here
-      // ...discount calculation
+    const billingAddressId = billing_address_id || shipping_address_id
+    const { data: billingAddress, error: billingError } = await supabase
+      .from('addresses')
+      .select('*')
+      .eq('id', billingAddressId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (billingError || !billingAddress) {
+      return NextResponse.json({ error: 'Invalid billing address' }, { status: 400 })
     }
 
-    // Fetch site settings for tax and shipping calculations
-    const { data: settings } = await supabase
-      .from('site_settings')
-      .select('key, value, type')
-      .in('key', ['tax_rate', 'free_shipping_threshold', 'standard_shipping_fee'])
-
-    // Convert settings to object
-    const settingsMap: Record<string, number> = {}
-    settings?.forEach((setting) => {
-      settingsMap[setting.key] = parseFloat(setting.value)
+    // Transform address format for finance function
+    const transformAddress = (addr: any) => ({
+      customer_name: addr.full_name.split(' ')[0] || addr.full_name,
+      last_name: addr.full_name.split(' ').slice(1).join(' ') || '',
+      address: addr.address_line1,
+      address_2: addr.address_line2 || '',
+      city: addr.city,
+      pincode: addr.postal_code,
+      state: addr.state,
+      country: addr.country,
+      email: user.email || '',
+      phone: addr.phone,
+      alternate_phone: addr.alternate_phone || '',
+      isd_code: '+91',
     })
 
-    // Get tax rate from settings (default to 0.18 if not found)
-    const taxRate = settingsMap['tax_rate'] || 0.18
-    
-    // Calculate shipping fee based on shipping method and database settings
-    let shipping_fee = 0
-    const freeShippingThreshold = settingsMap['free_shipping_threshold'] || 500
-    const standardShippingFee = settingsMap['standard_shipping_fee'] || 50
+    // Prepare cart items for finance calculation
+    const cartItemsInput = cart.cart_items.map((item: any) => ({
+      product_variant_id: item.product_variant_id,
+      quantity: item.quantity,
+      gstRate: item.product_variant?.product?.gst_rate,
+    }))
 
-    if (shipping_method === 'standard') {
-      // Free shipping if order meets threshold
-      shipping_fee = subtotal >= freeShippingThreshold ? 0 : standardShippingFee
-    } else if (shipping_method === 'express') {
-      shipping_fee = 200
-    } else if (shipping_method === 'same-day') {
-      shipping_fee = 300
-    } else {
-      // Default to standard shipping rules if method not specified
-      shipping_fee = subtotal >= freeShippingThreshold ? 0 : standardShippingFee
+    // Compute order financials using the unified function
+    const financialResult = await computeOrderFinancials({
+      cartItems: cartItemsInput,
+      shippingMethod: shipping_method || 'standard',
+      discount: 0, // TODO: Apply coupon discount
+      userId: user.id,
+      billingAddress: transformAddress(billingAddress),
+      shippingAddress: billing_address_id ? transformAddress(shippingAddress) : undefined,
+      shippingIsBilling: !billing_address_id,
+      paymentMethod: payment_method === 'cod' ? 'COD' : 'Prepaid',
+      pickupLocation: 'warehouse',
+      dimensions: package_dimensions,
+    })
+
+    console.log('Financial calculation result:', financialResult)
+
+    // Check validation warnings
+    if (!financialResult.validation.is_valid) {
+      console.warn('Order validation warnings:', financialResult.validation.warnings)
     }
-    
-    // Calculate tax on (subtotal - discount + shipping_fee) to match frontend
-    const tax = Math.round((subtotal - discount + shipping_fee) * taxRate)
-    
-    const total = subtotal - discount + tax + shipping_fee
 
     // Generate unique order number
     const { data: orderNumber } = await supabase.rpc('generate_order_number')
 
-    // Create order
+    // Prepare order items from financial calculation
+    const orderItems = financialResult.order_items.map((item) => ({
+      product_variant_id: item.product_variant_id,
+      product_name: item.product_name,
+      variant_details: {
+        sku: item.sku,
+      },
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      total_price: item.total_with_tax,
+      tax_amount: item.tax_amount,
+      gst_rate: item.gst_rate,
+    }))
+
+    // Create order with calculated financials (include metadata in initial insert)
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert({
         order_number: orderNumber,
         user_id: user.id,
         status: 'pending',
-        subtotal,
-        discount,
-        shipping_fee,
-        tax,
-        total,
+        subtotal: financialResult.order.subtotal,
+        discount: financialResult.order.discount,
+        shipping_fee: financialResult.order.shipping_fee,
+        tax: financialResult.order.tax,
+        total: financialResult.order.total,
         shipping_address_id,
-        billing_address_id,
+        billing_address_id: billingAddressId,
         notes,
+        metadata: {
+          shiprocket_payload: financialResult.shiprocket_payload,
+          financial_breakdown: financialResult.order,
+        },
       })
       .select()
       .single()
@@ -180,13 +192,14 @@ export async function POST(request: NextRequest) {
       .from('payments')
       .insert({
         order_id: order.id,
-        amount: total,
+        amount: financialResult.order.total,
         currency: 'INR',
         status: payment_method === 'cod' ? 'created' : 'created',
         payment_method: payment_method || 'cod',
         payment_metadata: {
           created_via: 'web',
           user_agent: request.headers.get('user-agent') || 'unknown',
+          razorpay_amount_paise: financialResult.razorpay_amount_paise,
         },
       })
 
@@ -207,11 +220,18 @@ export async function POST(request: NextRequest) {
     // For COD orders, cart is cleared immediately in the frontend
     // For online payments, cart is cleared after payment success verification
 
-    return NextResponse.json({ success: true, order })
+    // Return order with Shiprocket payload for potential shipment creation
+    return NextResponse.json({
+      success: true,
+      order,
+      financials: financialResult.order,
+      shiprocket_ready: true,
+      shiprocket_payload: financialResult.shiprocket_payload,
+    })
   } catch (error) {
     console.error('Order creation error:', error)
     return NextResponse.json(
-      { error: 'Failed to create order' },
+      { error: error instanceof Error ? error.message : 'Failed to create order' },
       { status: 500 }
     )
   }

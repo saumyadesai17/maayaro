@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const orderId = body.order_id || body.orderId
-    const { length, breadth, height, weight } = body
 
     if (!orderId) {
       return NextResponse.json({ error: 'Order ID is required' }, { status: 400 })
@@ -29,7 +28,8 @@ export async function POST(request: NextRequest) {
       .select(`
         *,
         order_items(*),
-        shipping_address:addresses!orders_shipping_address_id_fkey(*)
+        shipping_address:addresses!orders_shipping_address_id_fkey(*),
+        billing_address:addresses!orders_billing_address_id_fkey(*)
       `)
       .eq('id', orderId)
       .eq('user_id', user.id)
@@ -50,6 +50,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check if shipment already exists
+    const { data: existingShipment } = await supabase
+      .from('shipments')
+      .select('*')
+      .eq('order_id', orderId)
+      .single()
+
+    if (existingShipment) {
+      return NextResponse.json({
+        success: true,
+        message: 'Shipment already exists',
+        shipment: existingShipment,
+      })
+    }
+
     console.log('Order found:', order.order_number)
     console.log('Order items:', order.order_items)
 
@@ -61,66 +76,89 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Map order items for Shiprocket
-    // IMPORTANT: Shiprocket's tax calculation is complex and depends on state codes
-    // For inter-state (different state codes), they automatically apply IGST
-    // We send the tax-INCLUSIVE selling price and let them calculate tax breakdown
-    const shiprocketItems = order.order_items.map((item: any) => {
-      console.log('Mapping item:', item)
-      
-      // Calculate proportional tax for this item
-      const itemTaxAmount = order.tax ? (item.total_price / order.subtotal) * order.tax : 0;
-      
-      // Send tax-inclusive price as selling_price
-      const taxInclusivePrice = (parseFloat(item.unit_price) || 0) + itemTaxAmount;
-      
-      return {
-        name: item.product_name || 'Product',
-        sku: item.variant_details?.sku || item.sku || 'GENERIC-SKU',
-        units: parseInt(item.quantity) || 1,
-        selling_price: Math.round(taxInclusivePrice), // Tax-inclusive price
-        discount: 0,
-        tax: 0, // Let Shiprocket calculate tax from the inclusive price
+    // Use Shiprocket payload from order metadata if available (from new finance function)
+    let shiprocketOrder = order.metadata?.shiprocket_payload
+
+    if (shiprocketOrder) {
+      // Update with actual order number
+      shiprocketOrder = {
+        ...shiprocketOrder,
+        order_id: order.order_number,
+        invoice_number: `INV-${order.order_number}`,
+        order_date: new Date(order.created_at).toISOString().split('T')[0] + ' ' + 
+                    new Date(order.created_at).toTimeString().split(' ')[0].substring(0, 5),
       }
-    })
+      console.log('Using pre-computed Shiprocket payload from order metadata')
+    } else {
+      // Fallback: Build payload manually (for older orders)
+      console.log('Building Shiprocket payload manually (legacy order)')
+      
+      const shiprocketItems = order.order_items.map((item: any) => {
+        const itemTaxAmount = order.tax ? (item.total_price / order.subtotal) * order.tax : 0
+        const taxInclusivePrice = (parseFloat(item.unit_price) || 0) + itemTaxAmount
+        
+        return {
+          name: item.product_name || 'Product',
+          sku: item.variant_details?.sku || item.sku || 'GENERIC-SKU',
+          units: parseInt(item.quantity) || 1,
+          selling_price: Math.round(taxInclusivePrice),
+          discount: 0,
+          tax: 18, // Default GST
+        }
+      })
 
-    console.log('Shiprocket items:', shiprocketItems)
-
-    // Create Shiprocket order
-    const shiprocketOrder = {
-      order_id: order.order_number,
-      order_date: new Date(order.created_at).toISOString().split('T')[0],
-      pickup_location: 'warehouse', // Use your actual pickup location name
-      billing_customer_name: order.shipping_address.full_name,
-      billing_last_name: '',
-      billing_address: order.shipping_address.address_line1,
-      billing_address_2: order.shipping_address.address_line2 || '',
-      billing_city: order.shipping_address.city,
-      billing_pincode: order.shipping_address.postal_code,
-      billing_state: order.shipping_address.state,
-      billing_country: order.shipping_address.country,
-      billing_email: user.email,
-      billing_phone: order.shipping_address.phone,
-      shipping_is_billing: true,
-      order_items: shiprocketItems,
-      payment_method: 'Prepaid',
-      shipping_charges: order.shipping_fee || 0,
-      giftwrap_charges: 0,
-      transaction_charges: 0,
-      total_discount: order.discount || 0,
-      sub_total: order.subtotal,
-      length: length || 20, // In cm - from request or default
-      breadth: breadth || 15,
-      height: height || 10,
-      weight: weight || 0.5, // In kg - from request or default
+      shiprocketOrder = {
+        order_id: order.order_number,
+        order_date: new Date(order.created_at).toISOString().split('T')[0] + ' ' + 
+                    new Date(order.created_at).toTimeString().split(' ')[0].substring(0, 5),
+        pickup_location: 'warehouse',
+        
+        billing_customer_name: order.billing_address?.full_name?.split(' ')[0] || 'Customer',
+        billing_last_name: order.billing_address?.full_name?.split(' ').slice(1).join(' ') || '',
+        billing_address: order.billing_address?.address_line1 || '',
+        billing_address_2: order.billing_address?.address_line2 || '',
+        billing_city: order.billing_address?.city || '',
+        billing_pincode: order.billing_address?.postal_code || '',
+        billing_state: order.billing_address?.state || '',
+        billing_country: order.billing_address?.country || 'India',
+        billing_email: user.email || '',
+        billing_phone: order.billing_address?.phone || '',
+        billing_isd_code: '+91',
+        
+        shipping_is_billing: order.shipping_address_id === order.billing_address_id,
+        shipping_customer_name: order.shipping_address_id !== order.billing_address_id ? 
+          order.shipping_address?.full_name?.split(' ')[0] : undefined,
+        shipping_last_name: order.shipping_address_id !== order.billing_address_id ? 
+          order.shipping_address?.full_name?.split(' ').slice(1).join(' ') : undefined,
+        shipping_address: order.shipping_address_id !== order.billing_address_id ? 
+          order.shipping_address?.address_line1 : undefined,
+        shipping_city: order.shipping_address_id !== order.billing_address_id ? 
+          order.shipping_address?.city : undefined,
+        shipping_pincode: order.shipping_address_id !== order.billing_address_id ? 
+          order.shipping_address?.postal_code : undefined,
+        shipping_state: order.shipping_address_id !== order.billing_address_id ? 
+          order.shipping_address?.state : undefined,
+        shipping_country: order.shipping_address_id !== order.billing_address_id ? 
+          order.shipping_address?.country : undefined,
+        shipping_email: order.shipping_address_id !== order.billing_address_id ? 
+          user.email : undefined,
+        shipping_phone: order.shipping_address_id !== order.billing_address_id ? 
+          order.shipping_address?.phone : undefined,
+        
+        order_items: shiprocketItems,
+        payment_method: 'Prepaid',
+        shipping_charges: order.shipping_fee || 0,
+        total_discount: order.discount || 0,
+        sub_total: order.subtotal,
+        
+        length: body.length || 20,
+        breadth: body.breadth || 15,
+        height: body.height || 10,
+        weight: body.weight || 0.5,
+      }
     }
 
     console.log('Shiprocket order payload:', JSON.stringify(shiprocketOrder, null, 2))
-    
-    // Calculate expected Shiprocket total for validation
-    const expectedShiprocketTotal = order.subtotal + (order.shipping_fee || 0) + order.tax - (order.discount || 0);
-    console.log('Expected Shiprocket Total:', expectedShiprocketTotal, '(should match order.total:', order.total, ')');
-    console.log('Breakdown: subtotal', order.subtotal, '+ shipping', order.shipping_fee, '+ tax', order.tax, '- discount', order.discount);
 
     const data = await shiprocketRequest('/orders/create/adhoc', {
       method: 'POST',

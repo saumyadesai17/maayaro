@@ -42,7 +42,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ orders })
+    // Filter out orders with failed payments (pending orders without successful payment)
+    const validOrders = orders?.filter(order => {
+      // If order status is not pending, it's valid (confirmed/processing/shipped/etc)
+      if (order.status !== 'pending') return true;
+      
+      // For pending orders, check if payment was successful
+      const payment = Array.isArray(order.payment) ? order.payment[0] : order.payment;
+      
+      // Keep pending orders that have successful payment or are confirmed
+      return payment && (payment.status === 'success' || payment.status === 'captured');
+    }) || [];
+
+    return NextResponse.json({ orders: validOrders })
   } catch (error) {
     console.error('Error fetching orders:', error)
     return NextResponse.json(
